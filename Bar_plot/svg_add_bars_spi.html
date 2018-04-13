@@ -193,7 +193,11 @@
 							   .enter()
 							   .append("text")
 							   .text(function(d,i) {
-									return "D" + (5-i-1);
+									if (i<5){
+										return "D" + (5-i-1);
+									} else {
+										return "Normal";
+									}
 							   })
 							   .attr("x",function(d){
 									return (d[0]*fac)+leg_rect_width+5;
