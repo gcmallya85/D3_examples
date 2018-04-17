@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>D3 v3: GeoJSON maps India</title>
+		<script src="http://d3js.org/d3.v3.min.js"></script>
+		<link rel="stylesheet" href="https://rawgit.com/MasterMaps/d3-slider/master/d3.slider.css" />
+		<script src="https://rawgit.com/MasterMaps/d3-slider/master/d3.slider.js"></script>
+		<style type="text/css">
+			.axis text {
+			  font: 12px sans-serif;
+			}
+
+			.axis path,
+			.axis line {
+			  fill: none;
+			  stroke: #000;
+			  shape-rendering: crispEdges;
+			}
+			.wrapper {
+			  width: 750px;
+			}
+			div.title {
+				text-align: center;
+			}
+			div.tooltip_div {	
+				position: absolute;			
+				text-align: center;			
+				width: 80px;					
+				height: 25px;					
+				padding: 2px;				
+				font: 12px sans-serif;		
+				background: cyan;	
+				border: 0px;		
+				border-radius: 8px;			
+				pointer-events: none;			
+			}
+		</style>
+	</head>
+	<body>
+	
+		<div class="wrapper title">
+			<h2>SPI for Water Year : <span id="slider3text">1950</span><br><h3>(begining June, <span id="slider1text">1950</span> to May, <span id="slider2text">1951</span>)</h3></h2>
+		</div>
+		<div id="chart_div">
+			<svg></svg>
+		</div>
+		<!--<div id="legend_div">
+			<svg></svg>
+		</div>-->
+		<div class="wrapper">
+			<div id="slider3" width = 500></div>
+			<div class="title"> <br>Move the slider to visualize SPI results for different years</div>
+		</div>
+		<script type="text/javascript">
+			//Width and height of the chart viewport
+			var w = 800;
+			var h = 600;
+			
+			//Width and height of the legend svg
+			var leg_w = 800;
+			var leg_h = 50;
+			
+			// Define margin
+			var margin = {top: 20, right: 30, bottom: 40, left: 40},
+			width = w - margin.left - margin.right,
+			height = h - margin.top - margin.bottom;
+			
+			//Define map projection
+			//var projection = d3.geo.mercator().translate([width/2, height/2]);
+					   
+			//Define path generator
+			//var path = d3.geo.path().projection(projection);
+							 
+			//Create SVG variable
+			var svg = d3.select("#chart_div").select("svg")
+						.attr("width", w)
+						.attr("height", h);
+			
+			// Define the div for the tooltip
+			var tooltip_div = d3.select("body").select("#chart_div").append("div")	
+				.attr("class", "tooltip_div")				
+				.style("opacity", 0);
+				
+			//Load in GeoJSON data
+			d3.json("India_HomogCliDiv.json", function(json) {
+				// Refer: https://stackoverflow.com/questions/14492284/center-a-map-in-d3-given-a-geojson-object
+				// create a first guess for the projection
+				  var center = d3.geo.centroid(json)
+				  var scale  = 400;
+				  var offset = [width/2, height/2];
+				  var projection = d3.geo.mercator().scale(scale).center(center)
+					  .translate(offset);
+					  
+				  // create the path
+				  var path = d3.geo.path().projection(projection);
+				  
+				  // using the path determine the bounds of the current map and use 
+				  // these to determine better values for the scale and translation
+				  var bounds  = path.bounds(json);
+				  var hscale  = scale*width  / (bounds[1][0] - bounds[0][0]);
+				  var vscale  = scale*height / (bounds[1][1] - bounds[0][1]);
+				  var scale   = (hscale < vscale) ? hscale : vscale;
+				  var offset  = [width - (bounds[0][0] + bounds[1][0])/2,
+									height - (bounds[0][1] + bounds[1][1])/2];
+		  
+				// new projection
+				  projection = d3.geo.mercator().center(center)
+					.scale(scale).translate(offset);
+				  path = path.projection(projection);
+
+				  // add a rectangle to see the bound of the svg
+				  svg.append("rect").attr('width', width).attr('height', height)
+					.style('stroke', 'black').style('fill', 'none');
+
+				  svg.selectAll("path").data(json.features).enter().append("path")
+					.attr("d", path)
+					.style("fill", "white")
+					.style("stroke-width", "1")
+					.style("stroke", "black");
+					
+				var formatSPI = d3.format(".2f");
+				var fn = "spatial_data/SPI_1901.txt";
+				loadData(fn); // Loads file for each year separately
+				function loadData(fn){
+					d3.csv(fn,function(d) {
+						d.Lon = +d.Lon;
+						d.Lat = +d.Lat;
+						d.SPI = +d.SPI;
+						return d;
+						},function(data){
+						var circles = svg.selectAll("circle")
+						   .data(data);
+						
+						//Enter
+						circles.enter()
+						   .append("circle")
+						   .attr("cx", function(d) {
+						   //console.log(d);
+								   return projection([+d.Lon, +d.Lat])[0];
+						   })
+						   .attr("cy", function(d) {
+								   return projection([+d.Lon, +d.Lat])[1];
+						   })
+						   .attr("r", 5);
+						
+						// Update						
+						/*circles.append("title")
+						   .text(function(d) {
+									 return "SPI is " + formatSPI(d.SPI);
+							   });*/
+							   
+						circles.style("fill", function(d) {
+									if (d.SPI<-2){
+									return "black"; // D4 - Exceptional drought class
+									} else if (d.SPI<-1.6){
+									return "maroon"; // D3 - Extreme drought class
+									} else if (d.SPI<-1.3){
+									return "red"; // D2 - Severe drought class
+									} else if (d.SPI<-0.8){
+									return "orange"; // D1 - Moderate drought class
+									} else if (d.SPI<-0.5){
+									return "Yellow"; // D0 - Dry drought class
+									} else {
+									return "floralwhite"; // Normal or Wet conditions
+									}
+							   });
+						   
+						   
+						circles.style("stroke","grey")
+						   .style("opacity", 0.75)
+						   .on("mouseover",function(d){
+								d3.select(this).style("stroke","steelblue").style("stroke-width",2); // Adds blue stroke to the circle marker under the mouse tip
+								
+								// Display the SPI value using a tool tip
+								tooltip_div.transition()		
+									.duration(250)		
+									.style("opacity", 0.7);		
+								tooltip_div.html("SPI is " + formatSPI(d.SPI))	
+									.style("left", (d3.event.pageX) + "px")		
+									.style("top", (d3.event.pageY - 25) + "px");
+								
+						   })
+						   .on("mouseout",function(d){
+								d3.select(this).style("stroke","grey").style("stroke-width",1); // Restore stroke to original color
+								
+								// Hide the tool tip on mouse out
+								tooltip_div.transition()		
+									.duration(250)		
+									.style("opacity", 0);
+						   });
+						
+						// Exit
+						circles.exit().remove();
+					});
+				}
+			
+			// Add user interaction by including a slider
+			d3.select('#slider3').call(d3.slider().axis(d3.svg.axis().ticks(10)).min(1901).max(2003).step(1).value(1950).on("slide", function(evt, value) {
+					var fn = "spatial_data/SPI_" + value + ".txt";
+					//console.log(fn);
+					loadData(fn); // Loads file for each year separately
+					d3.select('#slider3text').text(value);
+					d3.select('#slider1text').text(value);
+					d3.select('#slider2text').text((value+1));
+				}));		
+			
+			});
+			
+		</script>
+	</body>
+</html>
